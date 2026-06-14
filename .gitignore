@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+archive/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+results/
+results_mini/
+figures/
+figures_mini/
+logs/
+*.npz
+*.FAILED.txt
