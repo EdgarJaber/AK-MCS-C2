@@ -118,7 +118,9 @@ class GPRegressor(BaseEstimator, RegressorMixin):
         use_cuda: bool = False,
         dtype: torch.dtype = torch.float64,
         seed: int = 0,
+        noise_lower: float = 1e-4,
     ) -> None:
+        self.noise_lower = noise_lower   # lower bound of the (standardised-y) noise; 1e-4 = gpytorch default
         self.mean = mean
         self.kernel = kernel
         self.ard = ard
@@ -147,7 +149,9 @@ class GPRegressor(BaseEstimator, RegressorMixin):
         tx = torch.as_tensor(X, dtype=self.dtype, device=self.device_)
         ty = torch.as_tensor(y_used, dtype=self.dtype, device=self.device_)
 
-        lik = gpytorch.likelihoods.GaussianLikelihood().to(self.device_, self.dtype)
+        lik = gpytorch.likelihoods.GaussianLikelihood(
+            noise_constraint=gpytorch.constraints.GreaterThan(float(self.noise_lower))
+        ).to(self.device_, self.dtype)
         if self.noise is not None:
             lik.noise = torch.tensor(float(self.noise), dtype=self.dtype, device=self.device_)
         if not self.learn_noise:
@@ -235,6 +239,35 @@ class LOOGPRegressor(GPRegressor):
         else:
             self.loo_mean_, self.loo_std_ = loo_mean_u, loo_std_u
         self.loo_residuals_ = self.y_train_ - self.loo_mean_
+
+    # -- latent posterior covariance (used by SUR criteria) ------------------
+    def latent_var(self, X: np.ndarray, batch_size: int = 8192) -> np.ndarray:
+        """Latent (noise-free) posterior variance at X, original y units."""
+        self._check_fitted(); X = _as_2d(X); out = []
+        scale = (self._scaler_.std_ ** 2) if self._scaler_ else 1.0
+        self.model_.eval()
+        with torch.no_grad():
+            for i in range(0, X.shape[0], batch_size):
+                x = torch.as_tensor(X[i : i + batch_size], dtype=self.dtype, device=self.device_)
+                k_xt = self.model_.covar_module(self._tx_, x).evaluate()          # (n, m)
+                c = torch.cholesky_solve(k_xt, self._L_)
+                kxx = self.model_.covar_module(x).diagonal()
+                out.append((kxx - (k_xt * c).sum(0)).clamp_min(0.0).cpu().numpy())
+        return np.concatenate(out) * scale
+
+    def latent_cross_cov(self, A: np.ndarray, B: np.ndarray) -> np.ndarray:
+        """Latent posterior covariance matrix cov(f(a), f(b)), shape (len(A), len(B)),
+        original y units: K_ab - K_aT (K_TT + s2 I)^{-1} K_Tb."""
+        self._check_fitted(); A = _as_2d(A); B = _as_2d(B)
+        scale = (self._scaler_.std_ ** 2) if self._scaler_ else 1.0
+        self.model_.eval()
+        with torch.no_grad():
+            a = torch.as_tensor(A, dtype=self.dtype, device=self.device_)
+            b = torch.as_tensor(B, dtype=self.dtype, device=self.device_)
+            k_ab = self.model_.covar_module(a, b).evaluate()
+            k_at = self.model_.covar_module(a, self._tx_).evaluate()
+            w = torch.cholesky_solve(self.model_.covar_module(self._tx_, b).evaluate(), self._L_)
+            return ((k_ab - k_at @ w).cpu().numpy()) * scale
 
     def loo_predict(self, return_std: bool = False):
         """LOO predictors at the *training* points (classical Dubrule formulas)."""

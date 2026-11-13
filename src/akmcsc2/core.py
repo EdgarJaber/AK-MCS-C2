@@ -9,10 +9,12 @@ certified bounds, and (iii) the empirical-coverage diagnostic.
 from __future__ import annotations
 
 import time
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional, Union
 
 import numpy as np
+from scipy.stats import norm
 from sklearn.preprocessing import StandardScaler
 
 from .conformal import ConformalGPRegressor, make_conformal
@@ -20,7 +22,97 @@ from .gp import LOOGPRegressor
 from .learning import IterationState, LearningFunction, Selection, make_learning
 from .problems import ReliabilityProblem
 
-__all__ = ["AKMCS", "AKMCSResult", "HistoryRecord"]
+__all__ = ["AKMCS", "AKMCSResult", "HistoryRecord", "DIAG_COLUMNS", "TIMER_NAMES"]
+
+# Per-iteration diagnostics (analytic benchmarks only, ``track_coverage=True``).
+# All coverages are measured on the UNEVALUATED MC points D \ D_t (as Eq. (32)
+# of the article); bands: c{k} = {|mu_t| <= k*sigma_t} (estimated boundary),
+# tb = {|g| <= 5%-quantile of |g|} (true boundary), fail = {g <= 0}.
+# ``conf_*`` need a conformal layer (NaN otherwise); ``gp_*`` are the Gaussian
+# intervals mu +- z_{1-a/2} sigma on the SAME design; ``miscov`` is the
+# miscoverage mass beta_t = #uncovered / N of Proposition 1; ``misclass`` is
+# #{sign(mu) != sign(g)} / N.
+_BANDS = ("all", "c1", "c2", "c3", "tb", "fail")
+DIAG_COLUMNS = tuple(
+    [f"{m}_cov_{b}" for m in ("conf", "gp") for b in _BANDS]
+    + [f"{m}_width_{b}" for m in ("conf", "gp") for b in ("all", "c2")]
+    + ["conf_miscov", "gp_miscov", "conf_miscov_fail", "gp_miscov_fail",
+       "gp_pf_lower", "gp_pf_upper", "misclass_all", "misclass_c2",
+       "n_unused", "n_band_c2"]
+)
+
+# Per-run wall-clock components (seconds). ``diag`` (coverage bookkeeping) and
+# the one-off evaluation of g on the whole cloud are NOT part of the method's
+# cost and are reported separately / excluded.
+TIMER_NAMES = (
+    "gp_fit",        # GP hyper-parameter fit + cached LOO factor
+    "gp_predict",    # posterior mean/std on the unevaluated cloud
+    "conf_fit",      # conformal scores R_i (LOO at training points)
+    "conf_bounds",   # conformal intervals on the FULL cloud (P_f^-, P_f^+)
+    "select",        # learning function + stopping test (incl. candidate intervals)
+    "g_eval",        # time spent in the limit-state function
+    "diag",          # coverage diagnostics (excluded from method cost)
+)
+
+
+def _peak_rss_mb():
+    """Peak resident set size of the process so far (MB); NaN if unavailable.
+    Meaningful per run only if the run is alone in a fresh process."""
+    try:
+        import resource, sys
+        r = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return r / (1024.0 * 1024.0) if sys.platform == "darwin" else r / 1024.0
+    except Exception:
+        return float("nan")
+
+
+def _band_stats(cov, width, mask):
+    if mask is None or not np.any(mask):
+        return np.nan, np.nan
+    return float(np.mean(cov[mask])), float(np.mean(width[mask]))
+
+
+def _diagnostics(mu, std, y_true, lo, up, unused, N, z, tb_thresh):
+    """One row of DIAG_COLUMNS. lo/up: conformal interval (None if absent)."""
+    u = unused
+    g, m, s = y_true[u], mu[u], std[u]
+    bands = {
+        "all": np.ones(g.shape, bool),
+        "c1": np.abs(m) <= 1.0 * s,
+        "c2": np.abs(m) <= 2.0 * s,
+        "c3": np.abs(m) <= 3.0 * s,
+        "tb": np.abs(g) <= tb_thresh,
+        "fail": g <= 0.0,
+    }
+    row = {}
+    for name, (l, h) in {"conf": (None if lo is None else lo[u], None if up is None else up[u]),
+                         "gp": (m - z * s, m + z * s)}.items():
+        if l is None:
+            for b in _BANDS:
+                row[f"{name}_cov_{b}"] = np.nan
+            for b in ("all", "c2"):
+                row[f"{name}_width_{b}"] = np.nan
+            row[f"{name}_miscov"] = row[f"{name}_miscov_fail"] = np.nan
+            continue
+        cov = (l <= g) & (g <= h)
+        wid = h - l
+        for b in _BANDS:
+            row[f"{name}_cov_{b}"] = _band_stats(cov, wid, bands[b])[0]
+        for b in ("all", "c2"):
+            row[f"{name}_width_{b}"] = _band_stats(cov, wid, bands[b])[1]
+        row[f"{name}_miscov"] = float(np.sum(~cov)) / N
+        row[f"{name}_miscov_fail"] = float(np.sum((~cov) & bands["fail"])) / N
+    # Gaussian-interval failure-probability bounds on the full cloud
+    lo_g = mu - z * std
+    hi_g = mu + z * std
+    row["gp_pf_lower"] = float(np.mean(hi_g <= 0.0))
+    row["gp_pf_upper"] = float(np.mean(lo_g <= 0.0))
+    wrong = np.sign(m) != np.sign(g)
+    row["misclass_all"] = float(np.sum(wrong)) / N
+    row["misclass_c2"] = float(np.sum(wrong & bands["c2"])) / N
+    row["n_unused"] = int(u.sum())
+    row["n_band_c2"] = int(bands["c2"].sum())
+    return np.array([row[c] for c in DIAG_COLUMNS], dtype=float)
 
 
 @dataclass
@@ -35,6 +127,8 @@ class HistoryRecord:
     batch_size: int
     emp_coverage: Optional[float]
     elapsed_s: float
+    diag: Optional[np.ndarray] = None       # DIAG_COLUMNS row
+    timers: Optional[dict] = None            # cumulative TIMER_NAMES at this iteration
 
 
 @dataclass
@@ -52,6 +146,20 @@ class AKMCSResult:
     pf_mc_ref: float                      # crude MC on the same cloud (analytic g only)
     gp: Optional[LOOGPRegressor] = None
     conformal: Optional[ConformalGPRegressor] = None
+    # Evaluation accounting. ``n_calls`` is the size of the FINAL design;
+    # ``n_calls_total`` also counts the evaluations of designs discarded by
+    # the min_iterations restart guard (the honest cost). The one-off
+    # evaluation of g on the whole cloud (track_coverage) is NOT counted.
+    n_calls_total: int = 0
+    n_restarts: int = 0
+    timers: dict = field(default_factory=dict)       # total seconds per TIMER_NAMES
+    peak_rss_mb: float = float("nan")
+
+    def diag_array(self) -> np.ndarray:
+        """(n_iter, len(DIAG_COLUMNS)); NaN rows when diagnostics are off."""
+        return np.array([h.diag if h.diag is not None
+                         else np.full(len(DIAG_COLUMNS), np.nan)
+                         for h in self.history], dtype=float)
 
     def history_array(self) -> np.ndarray:
         """(n_iter, 7): n_calls, pf_hat, pf_lower, pf_upper, pf_gap,
@@ -121,6 +229,7 @@ class AKMCS:
         track_coverage: bool = False,
         predict_batch_size: int = 65536,
         verbose: bool = False,
+        gp_interval_alpha: float = 0.1,
     ) -> None:
         self.problem = problem
         self.learning = (
@@ -142,12 +251,22 @@ class AKMCS:
         self.track_coverage = track_coverage
         self.predict_batch_size = predict_batch_size
         self.verbose = verbose
+        self.gp_interval_alpha = gp_interval_alpha
 
     # ------------------------------------------------------------------
     def run(self, seed: int = 0) -> AKMCSResult:
         rng = np.random.default_rng(seed)
         problem, learning = self.problem, self.learning
         use_conf = learning.requires_conformal
+        timers = defaultdict(float)
+        counters = {"total": 0, "restarts": 0}
+        z = float(norm.ppf(1.0 - self.gp_interval_alpha / 2.0))
+
+        def timed_g(X):
+            t = time.perf_counter()
+            out = problem(X)
+            timers["g_eval"] += time.perf_counter() - t
+            return out
 
         # 0) MC cloud --------------------------------------------------
         S_raw = problem.sample(self.n_mc, rng)
@@ -158,13 +277,15 @@ class AKMCS:
         y_true_full = None
         pf_mc_ref = np.nan
         if self.track_coverage:
-            y_true_full = problem(S_raw)             # evaluated ONCE
+            y_true_full = problem(S_raw)             # evaluated ONCE (diagnostic, not counted)
             pf_mc_ref = float(np.mean(y_true_full <= 0.0))
+            tb_thresh = float(np.quantile(np.abs(y_true_full), 0.05))
 
         # 1) initial design ---------------------------------------------
         def init_design():
             idx0 = rng.choice(N, size=self.n_init, replace=False)
-            y0 = problem(S_raw[idx0])
+            y0 = timed_g(S_raw[idx0])
+            counters['total'] += self.n_init
             cache = np.full(N, np.nan)
             cache[idx0] = y0
             return S[idx0].copy(), y0.copy(), set(int(i) for i in idx0), cache
@@ -181,7 +302,9 @@ class AKMCS:
         while True:
             # -- fit ONE surrogate -------------------------------------
             gp = self.gp_factory()
+            _t = time.perf_counter()
             gp.fit(X_train, y_train)
+            timers['gp_fit'] += time.perf_counter() - _t
 
             used_idx = np.fromiter(used, dtype=int)
             mask_unused = np.ones(N, dtype=bool)
@@ -189,6 +312,7 @@ class AKMCS:
 
             mu = np.empty(N)
             std = np.empty(N)
+            _t = time.perf_counter()
             if np.any(mask_unused):
                 mu[mask_unused], std[mask_unused] = gp.predict(
                     S[mask_unused], return_std=True,
@@ -196,10 +320,12 @@ class AKMCS:
                 )
             mu[used_idx] = y_cache[used_idx]
             std[used_idx] = 0.0
+            timers['gp_predict'] += time.perf_counter() - _t
             pf_hat = float(np.mean(mu <= 0.0))
 
             # -- conformal layer (shared fit) ---------------------------
             pf_lower = pf_upper = pf_gap = emp_cov = None
+            lo = up = None
             conf = None
             if use_conf:
                 conf = type(self.conformal_proto)(
@@ -207,13 +333,19 @@ class AKMCS:
                     alpha=self.conformal_proto.alpha,
                     eps=self.conformal_proto.eps,
                     prefit=True,
+                    loo_mode=getattr(self.conformal_proto, 'loo_mode', 'fixed'),
                 )
+                _t = time.perf_counter()
                 conf.fit(X_train, y_train)
+                timers['conf_fit'] += time.perf_counter() - _t
 
+                lo = up = None
                 if it % self.conformal_every == 0 or cached_bounds is None:
+                    _t = time.perf_counter()
                     interval = conf.predict_interval(
                         S, batch_size=self.predict_batch_size
                     )
+                    timers['conf_bounds'] += time.perf_counter() - _t
                     lo, up = interval[:, 0].copy(), interval[:, 1].copy()
                     lo[used_idx] = y_cache[used_idx]
                     up[used_idx] = y_cache[used_idx]
@@ -235,8 +367,17 @@ class AKMCS:
                 pf_lower=pf_lower, pf_upper=pf_upper, pf_gap=pf_gap,
                 n_calls=len(y_train), rng=rng,
             )
+            _t = time.perf_counter()
             selection = learning.select(state)
             stop = learning.converged(state, selection)
+            timers['select'] += time.perf_counter() - _t
+
+            diag = None
+            if y_true_full is not None:
+                _t = time.perf_counter()
+                diag = _diagnostics(mu, std, y_true_full, lo, up, mask_unused,
+                                    N, z, tb_thresh)
+                timers['diag'] += time.perf_counter() - _t
 
             history.append(HistoryRecord(
                 it=it, n_calls=len(y_train), pf_hat=pf_hat,
@@ -245,6 +386,7 @@ class AKMCS:
                 batch_size=len(selection.batch_idx),
                 emp_coverage=emp_cov,
                 elapsed_s=time.perf_counter() - t0,
+                diag=diag, timers=dict(timers),
             ))
             if self.verbose:
                 gap = f"{pf_gap:.2e}" if pf_gap is not None else "  NA  "
@@ -256,6 +398,7 @@ class AKMCS:
             # -- stop / restart / budget --------------------------------
             if stop or len(y_train) >= self.max_calls or selection.exhausted:
                 if stop and it < self.min_iterations and len(y_train) < self.max_calls:
+                    counters['restarts'] += 1
                     X_train, y_train, used, y_cache = init_design()
                     cached_bounds = None
                     it += 1
@@ -265,7 +408,8 @@ class AKMCS:
 
             # -- enrich --------------------------------------------------
             batch = np.asarray(selection.batch_idx, dtype=int)
-            y_new = problem(S_raw[batch])
+            y_new = timed_g(S_raw[batch])
+            counters['total'] += len(batch)
             X_train = np.vstack([X_train, S[batch]])
             y_train = np.append(y_train, y_new)
             for j, yv in zip(batch, y_new):
@@ -278,4 +422,6 @@ class AKMCS:
             n_calls=len(y_train), n_iterations=it + 1, converged=converged,
             history=history, X_train=X_train, y_train=y_train, S_raw=S_raw,
             pf_mc_ref=pf_mc_ref, gp=gp, conformal=conf,
+            n_calls_total=counters['total'], n_restarts=counters['restarts'],
+            timers=dict(timers), peak_rss_mb=_peak_rss_mb(),
         )

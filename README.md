@@ -29,7 +29,7 @@ from akmcsc2 import AKMCS, ConformalC2, LOOGPRegressor, four_branch
 
 algo = AKMCS(
     problem=four_branch(k=6),
-    learning=ConformalC2(pf_gap_tol=1e-3, batch_q=1),
+    learning=ConformalC2(rel_gap_tol=0.1, batch_q=1),
     conformal="j-mm-gp",          # or "j+gp"
     gp_factory=lambda: LOOGPRegressor(kernel="matern52", noise=1e-4),
     n_mc=100_000,

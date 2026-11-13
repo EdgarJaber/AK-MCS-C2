@@ -1,0 +1,18 @@
+wrote results_ablation/diagnostics_final.csv
+branch2d_k6    C2-C2-jp  cov_all conf/gp=0.717/0.717  cov_c2 conf/gp=1.000/1.000  in raw/infl/gp bounds=1.00/1.00/1.00
+branch2d_k6    C2-C2-mm  cov_all conf/gp=0.891/0.699  cov_c2 conf/gp=1.000/1.000  in raw/infl/gp bounds=1.00/1.00/1.00
+branch2d_k6    EFF-EFF   cov_all conf/gp=nan/0.692  cov_c2 conf/gp=nan/nan  in raw/infl/gp bounds=nan/nan/1.00
+branch2d_k6    U-U       cov_all conf/gp=nan/0.693  cov_c2 conf/gp=nan/nan  in raw/infl/gp bounds=nan/nan/0.94
+branch2d_k7    C2-C2-jp  cov_all conf/gp=0.751/0.735  cov_c2 conf/gp=1.000/1.000  in raw/infl/gp bounds=0.94/1.00/0.94
+branch2d_k7    C2-C2-mm  cov_all conf/gp=0.919/0.726  cov_c2 conf/gp=1.000/1.000  in raw/infl/gp bounds=0.98/1.00/0.98
+branch2d_k7    EFF-EFF   cov_all conf/gp=nan/0.722  cov_c2 conf/gp=nan/nan  in raw/infl/gp bounds=nan/nan/1.00
+branch2d_k7    U-U       cov_all conf/gp=nan/0.704  cov_c2 conf/gp=nan/nan  in raw/infl/gp bounds=nan/nan/0.82
+oscillator6d   C2-C2-jp  cov_all conf/gp=0.851/0.980  cov_c2 conf/gp=1.000/1.000  in raw/infl/gp bounds=1.00/1.00/1.00
+oscillator6d   C2-C2-mm  cov_all conf/gp=0.921/0.981  cov_c2 conf/gp=1.000/1.000  in raw/infl/gp bounds=1.00/1.00/1.00
+oscillator6d   EFF-EFF   cov_all conf/gp=nan/0.944  cov_c2 conf/gp=nan/nan  in raw/infl/gp bounds=nan/nan/1.00
+oscillator6d   U-U       cov_all conf/gp=nan/0.916  cov_c2 conf/gp=nan/nan  in raw/infl/gp bounds=nan/nan/1.00
+rastrigin2d    C2-C2-jp  cov_all conf/gp=0.998/1.000  cov_c2 conf/gp=1.000/1.000  in raw/infl/gp bounds=0.98/1.00/0.98
+rastrigin2d    C2-C2-mm  cov_all conf/gp=0.979/1.000  cov_c2 conf/gp=1.000/1.000  in raw/infl/gp bounds=0.92/1.00/1.00
+rastrigin2d    EFF-EFF   cov_all conf/gp=nan/0.979  cov_c2 conf/gp=nan/nan  in raw/infl/gp bounds=nan/nan/1.00
+rastrigin2d    U-U       cov_all conf/gp=nan/0.752  cov_c2 conf/gp=nan/nan  in raw/infl/gp bounds=nan/nan/0.00
+figures -> results_ablation/figures

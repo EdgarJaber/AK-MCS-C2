@@ -1,0 +1,36 @@
+{
+  "problems": [
+    "branch2d_k6",
+    "branch2d_k7",
+    "rastrigin2d",
+    "oscillator6d"
+  ],
+  "methods": [
+    "U",
+    "EFF",
+    "C2-jp",
+    "C2-mm"
+  ],
+  "n_seeds": 50,
+  "n_mc": 10000,
+  "n_init": 20,
+  "min_iterations": 20,
+  "alpha": 0.1,
+  "rel_gap_tol": 0.1,
+  "candidate_size": 5000,
+  "batch_q": 1,
+  "batch_delta": null,
+  "conformal_every": 1,
+  "gp": {
+    "kernel": "matern52",
+    "noise": 0.0001,
+    "learn_noise": true,
+    "training_iter": 100
+  },
+  "max_calls": {
+    "branch2d_k6": 200,
+    "branch2d_k7": 200,
+    "rastrigin2d": 650,
+    "oscillator6d": 250
+  }
+}

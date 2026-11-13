@@ -56,14 +56,17 @@ CONFIG = dict(
     n_init=20,
     min_iterations=20,
     alpha=0.1,
-    pf_gap_tol=1e-3,
+    rel_gap_tol=0.1,
     candidate_size=5000,
     batch_q=1,
     batch_delta=None,
     conformal_every=1,
     gp=dict(kernel="matern52", noise=1e-4, learn_noise=True, training_iter=100),
     # per-problem evaluation budget (Rastrigin needs ~600 for minmax/EFF)
-    max_calls={"branch2d_k6": 200, "branch2d_k7": 200,
+    # extra FE benchmark (not in the default list): pool size per problem
+    extra_problems=["truss23_tau120", "truss23_tau134"],
+    n_mc_by_problem={"truss23_tau120": 100000, "truss23_tau134": 200000},
+    max_calls={"truss23_tau120": 250, "truss23_tau134": 250, "branch2d_k6": 200, "branch2d_k7": 200,
                "rastrigin2d": 650, "oscillator6d": 250},
 )
 
@@ -80,7 +83,7 @@ def build_algo(problem_name: str, method: str, use_cuda: bool) -> AKMCS:
             candidate_size=CONFIG["candidate_size"],
             batch_q=CONFIG["batch_q"],
             batch_delta=CONFIG["batch_delta"],
-            pf_gap_tol=CONFIG["pf_gap_tol"],
+            rel_gap_tol=CONFIG["rel_gap_tol"],
         )
         from akmcsc2 import make_conformal
         conformal = make_conformal(

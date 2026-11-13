@@ -42,6 +42,11 @@ __all__ = [
 ]
 
 
+def _accepts_batch(m) -> bool:
+    import inspect
+    return "batch_size" in inspect.signature(m.predict).parameters
+
+
 def _plus_rank(n: int, alpha: float) -> int:
     """0-based index of the ceil((1-alpha)(n+1))-th smallest of n values."""
     k = int(math.ceil((1.0 - alpha) * (n + 1)))
@@ -65,6 +70,13 @@ class ConformalGPRegressor(BaseEstimator, RegressorMixin, ABC):
         Miscoverage level.
     eps : float
         Score-normalization floor, ``max(eps, sigma)``.
+    loo_mode : {"fixed", "refit"}
+        "fixed" (default): closed-form LOO identities with the hyper-parameters,
+        trend and output standardisation of the FULL fit held fixed (fast; an
+        approximation of the Jackknife+). "refit": the whole learning algorithm
+        (hyper-parameter estimation + standardisation) is re-run on each of the
+        n leave-one-out datasets (exact Jackknife+, n GP fits per iteration;
+        intended for the small-benchmark comparison, R4.5).
     prefit : bool
         If True, ``estimator`` is assumed already fitted on the same data and
         is reused without cloning/refitting. This is the hook used by the
@@ -78,11 +90,13 @@ class ConformalGPRegressor(BaseEstimator, RegressorMixin, ABC):
         alpha: float = 0.1,
         eps: float = 1e-12,
         prefit: bool = False,
+        loo_mode: str = "fixed",
     ) -> None:
         self.estimator = estimator
         self.alpha = alpha
         self.eps = eps
         self.prefit = prefit
+        self.loo_mode = loo_mode
 
     # -- fitting -----------------------------------------------------------
     def fit(self, X: np.ndarray, y: np.ndarray) -> "ConformalGPRegressor":
@@ -96,8 +110,22 @@ class ConformalGPRegressor(BaseEstimator, RegressorMixin, ABC):
             )
             self.estimator_.fit(X, y)
 
-        loo_mean, loo_std = self.estimator_.loo_predict(return_std=True)
         y = np.asarray(y, dtype=float).reshape(-1)
+        if self.loo_mode == "refit":
+            X = np.atleast_2d(np.asarray(X, dtype=float))
+            self._loo_models_ = []
+            loo_mean = np.empty(len(y)); loo_std = np.empty(len(y))
+            for i in range(len(y)):
+                keep = np.arange(len(y)) != i
+                m = clone(self.estimator_)
+                m.fit(X[keep], y[keep])
+                mu_i, sd_i = m.predict(X[i : i + 1], return_std=True)
+                loo_mean[i], loo_std[i] = mu_i[0], sd_i[0]
+                self._loo_models_.append(m)
+        elif self.loo_mode == "fixed":
+            loo_mean, loo_std = self.estimator_.loo_predict(return_std=True)
+        else:
+            raise ValueError("loo_mode must be 'fixed' or 'refit'")
         self.scores_ = np.abs(y - loo_mean) / np.maximum(loo_std, self.eps)
         self.n_ = len(self.scores_)
         self.trained_ = True
@@ -116,11 +144,20 @@ class ConformalGPRegressor(BaseEstimator, RegressorMixin, ABC):
         X = np.atleast_2d(np.asarray(X, dtype=float))
         out = np.empty((X.shape[0], 2), dtype=float)
         for i in range(0, X.shape[0], batch_size):
-            mu_loo, std_loo = self.estimator_.loo_predict_at(
-                X[i : i + batch_size], batch_size=batch_size
-            )
+            mu_loo, std_loo = self._loo_at(X[i : i + batch_size], batch_size)
             out[i : i + mu_loo.shape[0]] = self._interval_from_loo(mu_loo, std_loo)
         return out
+
+    def _loo_at(self, X, batch_size):
+        """(m, n) LOO means/stds at X for the selected ``loo_mode``."""
+        if self.loo_mode == "fixed":
+            return self.estimator_.loo_predict_at(X, batch_size=batch_size)
+        mus, sds = [], []
+        for m in self._loo_models_:
+            mu, sd = m.predict(X, return_std=True, batch_size=batch_size) \
+                if _accepts_batch(m) else m.predict(X, return_std=True)
+            mus.append(mu); sds.append(sd)
+        return np.column_stack(mus), np.column_stack(sds)
 
     @abstractmethod
     def _interval_from_loo(

@@ -1,0 +1,65 @@
+wrote results_ablation/ablation_summary.csv
+
+=== branch2d_k6: median |rel.err| % / median n_calls / converged ===
+    C2-C2-jp  err=  0.00  ncalls=   63  conv=1.00  n=50
+    C2-C2-mm  err=  0.00  ncalls=   71  conv=1.00  n=50
+   C2-EFF-jp  err=  0.00  ncalls=   74  conv=1.00  n=50
+   C2-EFF-mm  err=  0.00  ncalls=   79  conv=1.00  n=50
+     C2-U-jp  err=  0.00  ncalls=   67  conv=1.00  n=50
+     C2-U-mm  err=  0.00  ncalls=   74  conv=1.00  n=50
+   EFF-C2-jp  err=  0.00  ncalls=   57  conv=1.00  n=50
+   EFF-C2-mm  err=  0.00  ncalls=   59  conv=1.00  n=50
+     EFF-EFF  err=  0.00  ncalls=   69  conv=1.00  n=50
+       EFF-U  err=  0.00  ncalls=   62  conv=1.00  n=50
+     U-C2-jp  err=  0.00  ncalls=   56  conv=1.00  n=50
+     U-C2-mm  err=  0.00  ncalls=   60  conv=1.00  n=50
+       U-EFF  err=  0.00  ncalls=   69  conv=1.00  n=50
+         U-U  err=  0.00  ncalls=   59  conv=1.00  n=50
+
+=== branch2d_k7: median |rel.err| % / median n_calls / converged ===
+    C2-C2-jp  err=  0.00  ncalls=   53  conv=1.00  n=50
+    C2-C2-mm  err=  0.00  ncalls=   59  conv=1.00  n=50
+   C2-EFF-jp  err=  0.00  ncalls=   62  conv=1.00  n=50
+   C2-EFF-mm  err=  0.00  ncalls=   64  conv=1.00  n=50
+     C2-U-jp  err=  0.00  ncalls=   54  conv=1.00  n=50
+     C2-U-mm  err=  0.00  ncalls=   59  conv=1.00  n=50
+   EFF-C2-jp  err=  0.00  ncalls=   49  conv=1.00  n=50
+   EFF-C2-mm  err=  0.00  ncalls=   52  conv=1.00  n=50
+     EFF-EFF  err=  0.00  ncalls=   58  conv=1.00  n=50
+       EFF-U  err=  0.00  ncalls=   51  conv=1.00  n=50
+     U-C2-jp  err=  0.00  ncalls=   47  conv=1.00  n=50
+     U-C2-mm  err=  0.00  ncalls=   50  conv=1.00  n=50
+       U-EFF  err=  0.00  ncalls=   58  conv=1.00  n=50
+         U-U  err=  0.00  ncalls=   47  conv=1.00  n=50
+
+=== oscillator6d: median |rel.err| % / median n_calls / converged ===
+    C2-C2-jp  err=  1.20  ncalls=   79  conv=1.00  n=50
+    C2-C2-mm  err=  1.01  ncalls=   86  conv=1.00  n=50
+   C2-EFF-jp  err=  0.00  ncalls=  144  conv=1.00  n=50
+   C2-EFF-mm  err=  0.00  ncalls=  147  conv=1.00  n=50
+     C2-U-jp  err=  0.00  ncalls=  124  conv=1.00  n=50
+     C2-U-mm  err=  0.00  ncalls=  128  conv=1.00  n=50
+   EFF-C2-jp  err=  1.02  ncalls=   74  conv=1.00  n=50
+   EFF-C2-mm  err=  0.52  ncalls=   80  conv=1.00  n=50
+     EFF-EFF  err=  0.00  ncalls=  135  conv=1.00  n=50
+       EFF-U  err=  0.00  ncalls=  126  conv=1.00  n=50
+     U-C2-jp  err=  0.26  ncalls=   68  conv=1.00  n=50
+     U-C2-mm  err=  0.00  ncalls=   73  conv=1.00  n=50
+       U-EFF  err=  0.00  ncalls=  142  conv=1.00  n=50
+         U-U  err=  0.00  ncalls=  118  conv=1.00  n=50
+
+=== rastrigin2d: median |rel.err| % / median n_calls / converged ===
+    C2-C2-jp  err=  0.14  ncalls=  483  conv=1.00  n=50
+    C2-C2-mm  err=  0.27  ncalls=  500  conv=1.00  n=50
+   C2-EFF-jp  err=  0.00  ncalls=  650  conv=0.00  n=50
+   C2-EFF-mm  err=  0.00  ncalls=  650  conv=0.00  n=50
+     C2-U-jp  err=  0.00  ncalls=  576  conv=1.00  n=50
+     C2-U-mm  err=  0.00  ncalls=  591  conv=1.00  n=50
+   EFF-C2-jp  err=  0.20  ncalls=  455  conv=1.00  n=50
+   EFF-C2-mm  err=  0.14  ncalls=  474  conv=1.00  n=50
+     EFF-EFF  err=  0.00  ncalls=  636  conv=0.88  n=50
+       EFF-U  err=  0.00  ncalls=  564  conv=1.00  n=50
+     U-C2-jp  err= 78.85  ncalls=   79  conv=1.00  n=50
+     U-C2-mm  err= 40.75  ncalls=  350  conv=1.00  n=50
+       U-EFF  err=  0.00  ncalls=  650  conv=0.04  n=50
+         U-U  err= 26.25  ncalls=  409  conv=1.00  n=50
