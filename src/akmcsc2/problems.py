@@ -160,7 +160,7 @@ _TRUSS_PF_REF = {0.12: 1.52e-3, 0.134: 1.06e-4, 0.145: 1.18e-5}
 
 
 def truss23(tau: float = 0.12) -> ReliabilityProblem:
-    """23-bar truss of Lee & Kwak (2006), used in Marelli & Sudret (2018):
+    """23-bar truss of Blatman & Sudret (2011), used in Marelli & Sudret (2018):
     failure iff the mid-span vertical deflection exceeds ``tau`` (m).
 
     Inputs (independent): E1, E2 ~ LN(2.1e11, 2.1e10) Pa; A1 ~ LN(2e-3, 2e-4),

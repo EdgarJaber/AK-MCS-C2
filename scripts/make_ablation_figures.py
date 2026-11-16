@@ -30,19 +30,37 @@ out = Path(a.out); out.mkdir(exist_ok=True, parents=True)
 rows = {(r["problem"], r["cell"]): r for r in csv.DictReader(open(Path(a.results) / "ablation_summary.csv"))}
 def cell(sel, stop): return f"{sel}-{stop}" + (f"-{a.variant}" if "C2" in (sel, stop) else "")
 
+def _light(name, lo=0.05, hi=0.55):
+    base = plt.get_cmap(name)
+    return matplotlib.colors.LinearSegmentedColormap.from_list(
+        f"light_{name}", base(np.linspace(lo, hi, 256)))
+LIGHT_BLUES, LIGHT_REDS = _light("Blues"), _light("Reds")
+
 fig, ax = plt.subplots(2, 4, figsize=(12, 5.4))
 for j, pb in enumerate(PB):
     for i, (key, lab, fmt) in enumerate([("ncalls_median", "median $n_{calls}$", "{:.0f}"),
                                          ("abs_err_pct_median", "median $|$rel. err.$|$ (%)", "{:.2f}")]):
         M = np.array([[float(rows[(pb, cell(s, t))][key]) for t in S] for s in S])
-        im = ax[i, j].imshow(M, cmap="Blues" if i == 0 else "Reds",
-                             norm=matplotlib.colors.LogNorm(vmin=max(M[M > 0].min(), 1e-2), vmax=M.max()) if (M > 0).any() else None)
+        # light colour range only (the darkest shade stays at 55% of the map),
+        # and the text colour adapts to the cell luminance, so every number is legible
+        cm = LIGHT_BLUES if i == 0 else LIGHT_REDS
+        # log colour scale; zero errors are clipped to the floor (lightest shade)
+        # instead of being masked as blank cells
+        if i == 0:
+            Mc = M; norm = matplotlib.colors.Normalize(vmin=M.min(), vmax=M.max())
+        else:
+            Mc = np.maximum(M, 1e-2)
+            norm = matplotlib.colors.LogNorm(vmin=Mc.min(), vmax=max(Mc.max(), 10 * Mc.min()))
+        im = ax[i, j].imshow(Mc, cmap=cm, norm=norm)
         for u in range(3):
             for v in range(3):
                 conv = float(rows[(pb, cell(S[u], S[v]))]["converged_frac"])
+                rgb = im.cmap(im.norm(Mc[u, v]))[:3]
+                lum = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
                 ax[i, j].text(v, u, fmt.format(M[u, v]) + ("*" if conv < 0.99 else ""),
-                              ha="center", va="center", fontsize=8)
-        ax[i, j].set_xticks(range(3)); ax[i, j].set_xticklabels(S); ax[i, j].set_yticks(range(3)); ax[i, j].set_yticklabels(S)
+                              ha="center", va="center", fontsize=8.5,
+                              color="white" if lum < 0.45 else "black")
+        ax[i, j].set_xticks(range(3)); SL = ["U", "EFF", "C$^2$"]; ax[i, j].set_xticklabels(SL); ax[i, j].set_yticks(range(3)); ax[i, j].set_yticklabels(SL)
         if i == 1: ax[i, j].set_xlabel("stopping rule")
         if j == 0: ax[i, j].set_ylabel("selection rule\n" + lab)
         else: ax[i, j].set_ylabel(lab, fontsize=8)
@@ -50,7 +68,9 @@ for j, pb in enumerate(PB):
 fig.suptitle("Selection $\\times$ stopping ablation (C$^2$ cells: J-minmax-GP). * : not all runs converged within the budget", fontsize=9)
 fig.tight_layout(); fig.savefig(out / "ablation_grid.pdf"); plt.close(fig)
 
-# --- coverage curves
+# --- coverage curves (needs the run files *.npz)
+if not glob.glob(str(Path(a.results) / "*.npz")):
+    print("wrote", out / "ablation_grid.pdf", "(no run files: coverage figure skipped)"); raise SystemExit
 runs = defaultdict(list)
 for f in sorted(glob.glob(str(Path(a.results) / "*.npz"))):
     pb, c, _ = Path(f).stem.split("__")

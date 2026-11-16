@@ -200,7 +200,29 @@ class JMinmaxGP(ConformalGPRegressor):
         return np.column_stack([lower, upper])
 
 
-_CONFORMAL = {"j+gp": JPlusGP, "j-mm-gp": JMinmaxGP, "jminmax": JMinmaxGP}
+class GaussianGP(ConformalGPRegressor):
+    """Plain Gaussian prediction interval ``mu +/- z_{1-alpha/2} sigma`` of the
+    GP posterior (no conformal calibration). Same interface as the conformal
+    regressors, so that the C^2 selection and stopping rules can be driven by
+    the Gaussian interval instead (control experiment: does the conformal
+    calibration matter?). The conformity scores are still computed (unused)."""
+
+    def predict_interval(self, X, batch_size: int = 8192):
+        self._check_fitted()
+        from scipy.stats import norm
+        z = float(norm.ppf(1.0 - self.alpha / 2.0))
+        X = np.atleast_2d(np.asarray(X, dtype=float))
+        mu, sd = self.estimator_.predict(X, return_std=True, batch_size=batch_size)
+        mu = np.asarray(mu, dtype=float).reshape(-1)
+        sd = np.asarray(sd, dtype=float).reshape(-1)
+        return np.column_stack([mu - z * sd, mu + z * sd])
+
+    def _interval_from_loo(self, mu_loo, std_loo):  # not used
+        raise NotImplementedError("GaussianGP does not use LOO predictors")
+
+
+_CONFORMAL = {"j+gp": JPlusGP, "j-mm-gp": JMinmaxGP, "jminmax": JMinmaxGP,
+              "gaussian": GaussianGP, "gp": GaussianGP}
 
 
 def make_conformal(variant: str, **kwargs) -> ConformalGPRegressor:

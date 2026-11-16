@@ -4,8 +4,8 @@
 Per problem: <problem>_pf_vs_iter.pdf (as make_paper_assets.py) and
 <problem>_coverage_vs_iter.pdf with, in addition to the conformal coverage of
 the two C2 variants (solid, markers, IQR band), the empirical coverage of the
-Gaussian 90% intervals mu +- 1.645 sigma on each method's own design (dotted,
-same colour, no band). All coverages are on the unevaluated points D \\ D_t.
+Gaussian 90% intervals mu +- 1.645 sigma of the U and EFF methods on their own
+designs (dotted, same colour, no band). All coverages are on the unevaluated points D \\ D_t.
   python scripts/make_paper_assets_gauss.py --results results_ablation --out paper_assets_gauss
   python scripts/make_paper_assets_gauss.py --results results_truss --out paper_assets_gauss --truss
 """
@@ -50,9 +50,11 @@ for pb, (title, ref) in (TR if a.truss else PB).items():
             j = R[0]["cols"].index("conf_cov_all")
             m, lo, hi = band([r["diag"][:, j] for r in R]); x = np.arange(len(m))
             ax2.plot(x, m, color=col, marker=mk, ms=3.5, markevery=2, lw=1.2, label=lab + " (conformal)"); ax2.fill_between(x, lo, hi, color=col, alpha=0.12)
-        j = R[0]["cols"].index("gp_cov_all")
-        m, _, _ = band([r["diag"][:, j] for r in R]); x = np.arange(len(m))
-        ax2.plot(x, m, color=col, ls=":", lw=1.5, label=lab + " (Gaussian)")
+        else:
+            # Gaussian 90% intervals of the methods that use them (U, EFF)
+            j = R[0]["cols"].index("gp_cov_all")
+            m, _, _ = band([r["diag"][:, j] for r in R]); x = np.arange(len(m))
+            ax2.plot(x, m, color=col, ls=":", lw=1.5, label=lab + " (Gaussian)")
     ax1.axhline(ref, color="k", ls="--", lw=1, label=r"$P_f^{\mathrm{ref}}$"); ax1.set_xlabel("Number of iterations"); ax1.set_ylabel(r"$\widehat{P}_f$")
     if a.truss: ax1.set_yscale("log")
     ax1.set_title(title + "\n" + r"$\widehat{P}_f$ vs iterations", fontsize=10); ax1.legend(fontsize=8); ax1.grid(alpha=0.2)

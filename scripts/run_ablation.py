@@ -46,6 +46,11 @@ def sur_cells():
     return ["SUR-SUR", "SUR-C2-jp", "SUR-C2-mm", "C2-SUR-jp", "C2-SUR-mm"]
 
 
+def gauss_cells():
+    """Control: C2 selection/stopping driven by the plain Gaussian interval."""
+    return ["C2-C2-g"]
+
+
 def cells(fixed_budget: bool):
     stops = STOPS + (["none"] if fixed_budget else [])
     out = []
@@ -70,7 +75,7 @@ def build(problem_name: str, cell: str, rel_gap_tol: float, use_cuda: bool,
     )
     conformal = None
     if cv is not None:
-        conformal = make_conformal("j+gp" if cv == "jp" else "j-mm-gp",
+        conformal = make_conformal({"jp": "j+gp", "mm": "j-mm-gp", "g": "gaussian"}[cv],
                                    alpha=CONFIG["alpha"])
     gp_cfg = dict(CONFIG["gp"])
     return AKMCS(
@@ -134,10 +139,11 @@ def main():
                    help="seed-major: all cells/problems for seed 0, then seed 1, ... "
                         "(partial runs stay balanced)")
     p.add_argument("--sur", action="store_true", help="run ONLY the SUR comparison cells")
+    p.add_argument("--gauss", action="store_true", help="run ONLY the C2 cell driven by the Gaussian interval")
     p.add_argument("--list", action="store_true")
     a = p.parse_args()
 
-    all_cells = sur_cells() if a.sur else cells(a.fixed_budget)
+    all_cells = sur_cells() if a.sur else gauss_cells() if a.gauss else cells(a.fixed_budget)
     if a.list:
         print("\n".join(all_cells)); print(len(all_cells), "cells"); return
     sel_cells = a.cells or all_cells
