@@ -40,6 +40,7 @@ TITLES = {
     "branch2d_k7": "2D four-branch (k=7)",
     "rastrigin2d": "2D modified Rastrigin",
     "oscillator6d": "6D nonlinear oscillator",
+    "oscillator6d_variant": "6D nonlinear oscillator (variant)",
 }
 ALPHA = 0.10
 

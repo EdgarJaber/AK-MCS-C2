@@ -98,14 +98,26 @@ def modified_rastrigin() -> ReliabilityProblem:
 # 6D oscillator
 # ---------------------------------------------------------------------------
 
-def linear_oscillator() -> ReliabilityProblem:
-    """Single-DOF oscillator under transient excitation (Echard et al., 2011)."""
+def linear_oscillator(variant: bool = False) -> ReliabilityProblem:
+    """Single-DOF oscillator under transient excitation (Echard et al., 2011):
+
+        g = 3 r - | 2 F1 / (m w0^2) * sin(w0 t1 / 2) |,   w0 = sqrt((c1 + c2) / m).
+
+    Reference P_f = 2.86e-2 (2e7 Monte Carlo samples, seed 123, CoV 0.13%;
+    Echard et al. report 2.834e-2).
+
+    ``variant=True`` gives the version used in the revised manuscript, whose
+    sine argument is w0^2 t1 / 2 instead of w0 t1 / 2 (P_f = 3.9e-2 with the
+    same inputs). It is kept so that the published results can be reproduced
+    (problem name ``oscillator6d_variant``).
+    """
 
     def g(X: np.ndarray) -> np.ndarray:
         X = np.atleast_2d(X)
         c1, c2, m, r, t1, F1 = (X[:, j] for j in range(6))
         w0sq = (c1 + c2) / m
-        return 3.0 * r - np.abs(2.0 * F1 / (m * w0sq) * np.sin(w0sq * t1 / 2.0))
+        arg = w0sq * t1 / 2.0 if variant else np.sqrt(w0sq) * t1 / 2.0
+        return 3.0 * r - np.abs(2.0 * F1 / (m * w0sq) * np.sin(arg))
 
     means = np.array([1.0, 0.1, 1.0, 0.5, 1.0, 1.0])
     stds = np.array([0.1, 0.01, 0.05, 0.05, 0.2, 0.2])
@@ -115,12 +127,12 @@ def linear_oscillator() -> ReliabilityProblem:
         return means[None, :] + stds[None, :] * rng.standard_normal((n, 6))
 
     return ReliabilityProblem(
-        name="oscillator6d",
+        name="oscillator6d_variant" if variant else "oscillator6d",
         dim=6,
         g=g,
         sampler=sampler,
-        pf_ref=3.9e-2,
-        description="6D nonlinear oscillator",
+        pf_ref=3.9e-2 if variant else 2.86e-2,
+        description="6D nonlinear oscillator" + (" (variant: sin(w0^2 t1/2))" if variant else ""),
     )
 
 
@@ -217,6 +229,7 @@ PROBLEMS: Dict[str, Callable[[], ReliabilityProblem]] = {
     "branch2d_k7": lambda: four_branch(7.0),
     "rastrigin2d": modified_rastrigin,
     "oscillator6d": linear_oscillator,
+    "oscillator6d_variant": lambda: linear_oscillator(variant=True),
     "truss23_tau120": lambda: truss23(0.12),
     "truss23_tau134": lambda: truss23(0.134),
     "truss23_tau145": lambda: truss23(0.145),

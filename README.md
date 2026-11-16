@@ -149,7 +149,10 @@ tested designs (see `validation/`).
 `get_problem(name)` with `name` in:
   - `branch2d_k6`, `branch2d_k7`: four-branch series system;
   - `rastrigin2d`: modified Rastrigin, disconnected failure domain;
-  - `oscillator6d`: nonlinear oscillator;
+  - `oscillator6d`: nonlinear oscillator of Echard et al. (2011), P_f ≈ 2.86e-2;
+  - `oscillator6d_variant`: the version used in the revised article, whose
+    sine argument is ω₀²t₁/2 instead of ω₀t₁/2 (P_f ≈ 3.9e-2). Use it to
+    reproduce the published oscillator results;
   - `truss23_tau120`, `truss23_tau134`, `truss23_tau145`: the 23-bar truss of
     Blatman & Sudret (2011), d = 10, with failure when the mid-span deflection
     exceeds τ = 12, 13.4 or 14.5 cm (reference P_f ≈ 1.5e-3, 1.1e-4, 1.2e-5).

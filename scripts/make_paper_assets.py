@@ -16,7 +16,8 @@ import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 PB = {"branch2d_k6": ("2D four-branch (k=6)", 4.46e-3), "branch2d_k7": ("2D four-branch (k=7)", 2.23e-3),
-      "rastrigin2d": ("2D modified Rastrigin", 7.30e-2), "oscillator6d": ("6D nonlinear oscillator", 3.90e-2)}
+      "rastrigin2d": ("2D modified Rastrigin", 7.30e-2), "oscillator6d": ("6D nonlinear oscillator", 2.86e-2),
+      "oscillator6d_variant": ("6D nonlinear oscillator (variant)", 3.90e-2)}
 METHODS = [("U-U", "U", "C0", "o"), ("EFF-EFF", "EFF", "C1", "s"),
            ("C2-C2-jp", r"$C^2$-J+GP", "C2", "^"), ("C2-C2-mm", r"$C^2$-J+minmax-GP", "C3", "D")]
 p = argparse.ArgumentParser(); p.add_argument("--results", default="results_ablation"); p.add_argument("--out", default="paper_assets")
@@ -39,7 +40,27 @@ def band(curves, min_frac=0.5):
     return np.nanmedian(M, 0), np.nanpercentile(M, 25, 0), np.nanpercentile(M, 75, 0)
 
 rows = []
+
+def data_ref(pb, default):
+    """Tabulated reference P_f, checked against the run files: if the median
+    crude MC estimate on the populations (pf_mc_ref) differs from it by more
+    than 10% (e.g. old oscillator6d runs made with the sin(w0^2 t1/2) variant),
+    the data value is used and a warning is printed."""
+    refs = []
+    for f in sorted(glob.glob(str(Path(a.results) / f"{pb}__*__seed*.npz"))):
+        with np.load(f, allow_pickle=True) as d:
+            if "pf_mc_ref" in d.files and np.isfinite(float(d["pf_mc_ref"])):
+                refs.append(float(d["pf_mc_ref"]))
+    if not refs:
+        return default
+    med = float(np.median(refs))
+    if abs(med - default) > 0.1 * default:
+        print(f"[warning] {pb}: tabulated P_f_ref={default:.3e} but runs give {med:.3e}; using the runs")
+        return med
+    return default
+
 for pb, (title, ref) in PB.items():
+    ref = data_ref(pb, ref)
     fig1, ax1 = plt.subplots(figsize=(6, 3.7)); fig2, ax2 = plt.subplots(figsize=(6, 3.7))
     for cell, lab, col, mk in METHODS:
         R = load(pb, cell)
